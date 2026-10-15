@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Módulo 0 — Bitácora de taller</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400..600&family=Space+Mono:wght@400;700&display=swap');
+
+  :root{
+    --paper:#EFE9DC;
+    --paper-dim:#E6DFCE;
+    --ink:#1E2420;
+    --ink-soft:#46524A;
+    --grid:rgba(30,36,32,.09);
+    --ochre:#C98A2B;
+    --teal:#2E6E64;
+    --rust:#A8432F;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--ink);overflow:hidden}
+  body{font-family:'Space Mono',monospace;color:var(--ink)}
+
+  #stage{
+    position:relative;width:100vw;height:100vh;
+    background:
+      linear-gradient(var(--grid) 1px,transparent 1px) 0 0/40px 40px,
+      linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/40px 40px,
+      var(--paper);
+    overflow:hidden;
+  }
+  #stage::before{
+    content:'';position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 40%, transparent 55%, rgba(30,36,32,.1) 100%);
+  }
+
+  /* ---- Ruler / progress ---- */
+  #ruler{
+    position:absolute;top:0;left:0;right:0;height:52px;
+    display:flex;align-items:stretch;z-index:50;
+    background:var(--paper-dim);border-bottom:1.5px solid var(--ink);
+  }
+  .tick{
+    flex:1;position:relative;border-right:1px solid rgba(30,36,32,.25);
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;letter-spacing:.04em;color:var(--ink-soft);
+    transition:background .4s ease,color .4s ease;
+  }
+  .tick:last-child{border-right:none}
+  .tick.active{background:var(--ochre);color:var(--paper);font-weight:700}
+  .tick.done{background:rgba(201,138,43,.28)}
+  .tick span{position:relative;z-index:2}
+
+  /* ---- Scene layer ---- */
+  .scene{
+    position:absolute;inset:52px 0 0 0;
+    opacity:0;pointer-events:none;
+  }
+  .scene.live{opacity:1;pointer-events:auto}
+
+  .text-block{
+    position:absolute;left:0;top:0;bottom:0;width:33%;
+    padding:0 2.5vw 0 4.5vw;z-index:5;
+    display:flex;flex-direction:column;justify-content:center;
+  }
+  .kicker{
+    font-size:12px;color:var(--teal);font-weight:700;margin:0 0 8px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .kicker .num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:22px;height:22px;border:1.5px solid var(--teal);border-radius:50%;
+    font-size:11px;
+  }
+  h1.headline{
+    font-family:'Fraunces',serif;font-weight:600;font-style:normal;
+    font-size:clamp(22px,3vw,34px);line-height:1.15;margin:0 0 10px;
+    letter-spacing:-.01em;max-width:100%;
+  }
+  .sub{
+    font-family:'Space Mono',monospace;font-size:13px;line-height:1.55;
+    color:var(--ink-soft);max-width:100%;
+  }
+  .headline .word{display:inline-block;opacity:0;transform:translateY(.4em);filter:blur(2px)}
+
+  /* underline draw */
+  .ink-rule{
+    width:0;height:2px;background:var(--ochre);margin-top:10px;
+    transition:width 1s cubic-bezier(.3,.8,.2,1);
+  }
+  .scene.live .ink-rule{width:48px}
+
+  /* ---- Visual panel (image, large & centered) ---- */
+  .visual{
+    position:absolute;left:34%;right:3vw;top:24px;bottom:92px;
+    display:flex;align-items:center;justify-content:center;
+  }
+
+  .pin{
+    position:relative;background:#fff;border:1px solid rgba(30,36,32,.3);
+    box-shadow:0 18px 34px -12px rgba(30,36,32,.45),0 2px 0 rgba(30,36,32,.15);
+    padding:10px;max-width:100%;
+    display:flex;align-items:center;justify-content:center;
+    transform:rotate(var(--tilt,-2deg)) translateY(30px) scale(.96);
+    opacity:0;transition:transform .9s cubic-bezier(.2,1.4,.3,1),opacity .6s ease;
+  }
+  .scene.live .pin{transform:rotate(var(--tilt,-2deg)) translateY(0) scale(1);opacity:1}
+  .pin .tape{
+    position:absolute;top:-14px;left:50%;transform:translateX(-50%) rotate(-3deg);
+    width:70px;height:26px;background:rgba(201,138,43,.55);
+    box-shadow:0 2px 4px rgba(0,0,0,.15);
+  }
+  .pin-note{
+    position:absolute;bottom:-16px;right:-22px;background:#FBF3DD;
+    border:1px solid rgba(30,36,32,.25);padding:8px 10px;font-size:11.5px;
+    max-width:150px;box-shadow:0 8px 16px -6px rgba(30,36,32,.35);
+    transform:rotate(3deg) scale(.9);opacity:0;
+    transition:transform .6s ease .5s,opacity .5s ease .5s;
+  }
+  .scene.live .pin-note{transform:rotate(3deg) scale(1);opacity:1}
+
+  .pin .frame{
+    position:relative;flex:none;overflow:hidden;background:#fff;
+    width:100%;height:100%;
+  }
+  .pin .frame img.slide{
+    position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center;
+    opacity:0;transition:opacity .7s ease;
+  }
+  .pin .frame img.slide.on{opacity:1}
+
+  .pin .frame .url-list{
+    position:absolute;top:0;left:0;right:0;z-index:6;
+    display:flex;flex-direction:column;
+  }
+  .pin .frame .url-item{
+    display:block;padding:6px 12px;background:rgba(30,36,32,.88);color:var(--paper);
+    font-family:'Space Mono',monospace;font-size:11.5px;letter-spacing:.02em;
+    border-bottom:1px solid rgba(239,233,220,.15);
+    text-decoration:none;cursor:pointer;
+  }
+  .pin .frame .url-item:hover{background:rgba(201,138,43,.9)}
+
+  /* ---- Visualización real en vivo (iframe de la página de ejemplo, con scroll animado) ---- */
+  .live-demo-slide{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    opacity:0;transition:opacity .7s ease;background:#fff;
+  }
+  .live-demo-slide.on{opacity:1}
+  .browser-chrome{
+    flex:none;height:26px;background:#e9e5d8;border-bottom:1px solid rgba(30,36,32,.2);
+    display:flex;align-items:center;gap:8px;padding:0 10px;
+  }
+  .chrome-dots{display:flex;gap:5px}
+  .chrome-dots span{width:7px;height:7px;border-radius:50%;background:rgba(30,36,32,.25)}
+  .chrome-url{
+    font-family:'Space Mono',monospace;font-size:9.5px;color:var(--ink-soft);
+    background:#fff;border-radius:10px;padding:2px 10px;
+  }
+  .scroll-clip{position:relative;flex:1;overflow:hidden}
+  .live-iframe{pointer-events:none;border:0}
+  .laptop-clip .live-iframe{
+    position:absolute;top:0;left:0;width:100%;height:2600px;
+    animation:liveScrollLaptop 15s ease-in-out infinite alternate;
+  }
+  @keyframes liveScrollLaptop{
+    from{transform:translateY(0)} to{transform:translateY(-1150px)}
+  }
+  .phone-wrap{
+    margin:auto;width:42%;max-width:190px;aspect-ratio:9/18.5;
+    background:#111;border-radius:20px;padding:9px 6px;
+    box-shadow:0 14px 28px rgba(0,0,0,.32);position:relative;
+  }
+  .phone-notch{
+    position:absolute;top:9px;left:50%;transform:translateX(-50%);
+    width:42px;height:12px;background:#111;border-radius:8px;z-index:2;
+  }
+  .phone-clip{
+    position:relative;width:100%;height:100%;overflow:hidden;
+    border-radius:12px;background:#fff;
+  }
+  .phone-clip .live-iframe{
+    position:absolute;top:0;left:0;width:380px;height:3200px;
+    transform-origin:top left;
+    animation:liveScrollPhone 15s ease-in-out infinite alternate .3s;
+  }
+  @keyframes liveScrollPhone{
+    from{transform:scale(.46) translateY(0)} to{transform:scale(.46) translateY(-1700px)}
+  }
+
+  .browser-chrome{
+    background:#EDEAE2;border-bottom:1px solid rgba(30,36,32,.2);
+    padding:7px 9px;display:flex;gap:5px;align-items:center;
+  }
+  .browser-chrome i{width:8px;height:8px;border-radius:50%;background:rgba(30,36,32,.25);display:block}
+  .browser-chrome .url{
+    flex:1;margin-left:6px;background:#fff;border:1px solid rgba(30,36,32,.15);
+    font-size:10px;padding:3px 8px;color:var(--ink-soft);border-radius:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .shot{
+    aspect-ratio:16/10;background:
+      repeating-linear-gradient(45deg,rgba(30,36,22,.06) 0 10px,transparent 10px 20px),
+      #E3DED0;
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;color:var(--ink-soft);text-align:center;padding:12px;
+    border:1px dashed rgba(30,36,32,.35);
+  }
+  .shot.ready{background:#fff;border-style:solid}
+
+  /* ---- Icon row (scene 3) ---- */
+  .icon-row{display:flex;flex-direction:column;gap:18px}
+  .icon-item{
+    display:flex;align-items:center;gap:16px;opacity:.25;
+    transform:translateX(16px);
+    transition:opacity .5s ease,transform .5s ease;
+  }
+  .icon-item.on{opacity:1;transform:translateX(0)}
+  .icon-item .ibox{
+    width:52px;height:52px;border:1.5px solid var(--ink);flex:none;
+    display:flex;align-items:center;justify-content:center;background:var(--paper);
+    transition:background .4s,border-color .4s;
+  }
+  .icon-item.on .ibox{background:var(--ochre);border-color:var(--ochre)}
+  .icon-item svg{width:26px;height:26px;stroke:var(--ink);fill:none;stroke-width:1.6}
+  .icon-item.on svg{stroke:var(--paper)}
+  .icon-item .ilabel{font-size:14px;letter-spacing:.02em}
+
+  /* ---- Cost tags (scene 5) ---- */
+  .tag-stack{display:flex;flex-direction:column;gap:14px}
+  .cost-tag{
+    opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease;
+    border-left:3px solid var(--teal);padding:8px 0 8px 16px;
+  }
+  .cost-tag.on{opacity:1;transform:translateY(0)}
+  .cost-tag .label{font-size:13px;color:var(--ink-soft)}
+  .cost-tag .value{font-family:'Fraunces',serif;font-size:22px;font-weight:600}
+  .cost-tag.warn{border-left-color:var(--rust)}
+
+  /* ---- Page-type cards (scene 6) ---- */
+  .type-stack{display:flex;flex-direction:column;gap:14px}
+  .type-card{
+    opacity:0;transform:translateX(18px);transition:opacity .5s ease,transform .5s ease;
+    background:#fff;border:1px solid rgba(30,36,32,.3);padding:12px 14px;
+    box-shadow:0 10px 18px -10px rgba(30,36,32,.35);
+  }
+  .type-card.on{opacity:1;transform:translateX(0)}
+  .type-card .t-name{font-family:'Fraunces',serif;font-weight:600;font-size:17px}
+  .type-card .t-desc{font-size:11.5px;color:var(--ink-soft);margin-top:3px}
+
+  /* ---- Checkbox options (scene 7) ---- */
+  .choice-list{display:flex;flex-direction:column;gap:12px}
+  .choice-item{display:flex;align-items:center;gap:12px;font-size:14px}
+  .choice-item .box{
+    width:20px;height:20px;border:1.5px solid var(--ink);flex:none;background:#fff;
+  }
+
+  /* ---- Reference chips (scene 8) ---- */
+  .chip-row{display:flex;flex-wrap:wrap;gap:10px;max-width:360px}
+  .chip{
+    opacity:0;transform:scale(.85);transition:opacity .4s ease,transform .4s ease;
+    border:1.5px solid var(--ink);padding:8px 14px;font-size:13px;background:var(--paper);
+  }
+  .chip.on{opacity:1;transform:scale(1)}
+
+  /* ---- Checklist (scene 10) ---- */
+  .check-list{display:flex;flex-direction:column;gap:11px}
+  .check-item{display:flex;align-items:center;gap:12px;font-size:14.5px;opacity:.3;transition:opacity .4s}
+  .check-item.on{opacity:1}
+  .check-item .ck{
+    width:22px;height:22px;border:1.5px solid var(--ink);flex:none;position:relative;
+  }
+  .check-item.on .ck::after{
+    content:'';position:absolute;left:3px;top:6px;width:13px;height:7px;
+    border-left:2.5px solid var(--teal);border-bottom:2.5px solid var(--teal);
+    transform:rotate(-45deg);
+  }
+
+  /* ---- Controls ---- */
+  #controls{
+    position:absolute;bottom:18px;left:0;right:0;z-index:60;
+    display:flex;align-items:center;justify-content:center;gap:14px;
+  }
+  #controls button{
+    font-family:'Space Mono',monospace;font-size:13px;letter-spacing:.03em;
+    background:var(--ink);color:var(--paper);border:none;padding:10px 20px;
+    cursor:pointer;border-radius:2px;
+  }
+  #controls button:hover{background:#000}
+  #controls .scene-label{
+    font-size:12px;color:var(--ink-soft);background:rgba(239,233,220,.9);
+    padding:8px 14px;border:1px solid rgba(30,36,32,.2);
+  }
+  #speedControls{display:flex;gap:4px}
+  #speedControls button{
+    font-family:'Space Mono',monospace;font-size:11.5px;letter-spacing:.02em;
+    background:rgba(239,233,220,.9);color:var(--ink);border:1px solid rgba(30,36,32,.3);
+    padding:9px 11px;cursor:pointer;border-radius:2px;
+  }
+  #speedControls button:hover{background:#fff}
+  #speedControls button.active{background:var(--ochre);border-color:var(--ink);color:var(--ink);font-weight:700}
+  #timelineRow{
+    position:absolute;bottom:76px;left:50%;transform:translateX(-50%);z-index:60;
+    display:flex;align-items:center;gap:10px;width:min(620px,86vw);
+  }
+  #timeLabel{
+    font-family:'Space Mono',monospace;font-size:12px;color:var(--paper);
+    background:var(--ink);padding:6px 9px;border-radius:2px;white-space:nowrap;
+  }
+  #seekBar{
+    flex:1;-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;
+    background:rgba(30,36,32,.18);outline:none;cursor:pointer;
+  }
+  #seekBar::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--ochre);border:2px solid var(--ink);cursor:pointer;margin-top:-4.5px;
+  }
+  #seekBar::-moz-range-thumb{
+    width:15px;height:15px;border-radius:50%;background:var(--ochre);
+    border:2px solid var(--ink);cursor:pointer;
+  }
+  #seekBar::-webkit-slider-runnable-track{height:6px;border-radius:3px}
+  #seekWrap{position:relative;flex:1;display:flex;align-items:center}
+  #seekWrap #seekBar{width:100%}
+  #chapterMarks{
+    position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+    height:6px;pointer-events:none;
+  }
+  #chapterMarks .mark{
+    position:absolute;top:-3px;width:2px;height:12px;background:var(--ink);
+    opacity:.55;
+  }
+  #startOverlay{
+    position:absolute;inset:0;z-index:100;background:var(--ink);
+    display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;
+    color:var(--paper);
+  }
+  #startOverlay h2{font-family:'Fraunces',serif;font-size:28px;margin:0}
+  #startOverlay button{
+    font-family:'Space Mono',monospace;font-size:14px;background:var(--ochre);
+    color:var(--ink);border:none;padding:14px 28px;cursor:pointer;
+  }
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="ruler"></div>
+  <div id="scenes"></div>
+  <div id="timelineRow" hidden>
+    <span id="timeLabel">0:00 / 0:00</span>
+    <div id="seekWrap">
+      <div id="chapterMarks"></div>
+      <input type="range" id="seekBar" min="0" max="1000" value="0" step="0.1">
+    </div>
+  </div>
+  <div id="controls" hidden>
+    <button id="prevBtn">◂ anterior</button>
+    <button id="playBtn">▶ reproducir</button>
+    <button id="nextBtn">siguiente ▸</button>
+    <span class="scene-label" id="sceneLabel"></span>
+    <div id="speedControls">
+      <button data-rate="1" class="active">1x</button>
+      <button data-rate="1.5">1.5x</button>
+      <button data-rate="2">2x</button>
+    </div>
+  </div>
+  <div id="startOverlay">
+    <h2>Módulo 0 — Antes de empezar</h2>
+    <button id="startBtn">▶ Reproducir módulo</button>
+  </div>
+</div>
+
+<audio id="player" style="display:none"></audio>
+<div id="audioDebug" style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);z-index:70;font:11px monospace;color:#C98A2B;background:#1E2420;padding:3px 8px;"></div>
+
+<script>
+(function(){
+  const SCENES = [
+    {
+      file:'01_Introduccion.mp3', kicker:'Módulo 0',
+      headline:'Vas a crear tu página web.',
+      sub:'Sin programar. Sin experiencia previa. Paso a paso, desde cero.',
+      visual:({pin})=>pin({tilt:'-2deg', images:['Crea tu web con IA_ paso a paso.png']})
+    },
+    {
+      file:'02_Resultado_final.mp3', kicker:'Hacia dónde vamos',
+      headline:'Así vas a terminar.',
+      sub:'Una página real, publicada en internet, con tu propio dominio.',
+      visual:({mount})=>{
+        const demoUrl = imgSrc('demo-dulce-taller.html');
+        mount(`<div class="pin" style="--tilt:-3deg">
+          <div class="tape"></div>
+          <div class="frame">
+            <div class="live-demo-slide on">
+              <div class="browser-chrome"><div class="chrome-dots"><span></span><span></span><span></span></div><div class="chrome-url">tu-negocio.cl</div></div>
+              <div class="scroll-clip laptop-clip"><iframe class="live-iframe" src="${demoUrl}" scrolling="no" tabindex="-1"></iframe></div>
+            </div>
+            <div class="live-demo-slide">
+              <div class="phone-wrap"><div class="phone-notch"></div><div class="scroll-clip phone-clip"><iframe class="live-iframe" src="${demoUrl}" scrolling="no" tabindex="-1"></iframe></div></div>
+            </div>
+          </div>
+          <div class="pin-note">Computador — y también celular</div>
+        </div>`);
+        return {slideSchedules:[{selector:'.live-demo-slide', delays:[0,16000]}]};
+      }
+    },
+    {
+      file:'03_Requisitos.mp3', kicker:'Qué necesitas',
+      headline:'Cuatro cosas antes de partir.',
+      sub:'',
+      visual:({pin})=>pin({tilt:'1deg', images:['Qué necesitas para empezar.png']})
+    },
+    {
+      file:'04_Correo_electronico.mp3', kicker:'Correo electrónico',
+      headline:'Vas a necesitar un correo.',
+      sub:'El que ya usas y recuerdas la contraseña, o uno nuevo solo para tu negocio.',
+      visual:({pin})=>pin({tilt:'2deg', images:['Inicio de sesión de Google en portátil.png']})
+    },
+    {
+      file:'05_Costos.mp3', kicker:'Costos',
+      headline:'Cuánto vas a invertir.',
+      sub:'Además del valor del curso, calcula esto:',
+      visual:({pin})=>pin({tilt:'-1deg', images:['Guía visual de herramientas digitales y precios.png']})
+    },
+    {
+      file:'06_Tipos_de_pagina.mp3', kicker:'Elige tu página',
+      headline:'Tres tipos de página.',
+      sub:'',
+      visual:({pin})=>pin({tilt:'-2deg', note:'Landing → informativa → tienda',
+        images:[
+          'Mockup de landing page para limpieza de sillones.png',
+          'Página informativa para estudio de arquitectura.png',
+          'Tienda online de velas artesanales.png'
+        ],
+        delays:[2000,30000,58000]})
+    },
+    {
+      file:'07_Actividad.mp3', kicker:'Actividad',
+      headline:'Tu primera decisión.',
+      sub:'Piensa en tu negocio y anótalo — lo vamos a necesitar en el Módulo 1.',
+      visual:({pin})=>pin({tilt:'1deg', images:['Opciones de páginas web para tu negocio.png']})
+    },
+    {
+      file:'08_Buscar_referencias.mp3', kicker:'Referencias',
+      headline:'Busca referencias.',
+      sub:'No para copiar — para descubrir qué te gusta.',
+      visual:({pin})=>pin({tilt:'-1.5deg',
+        images:[
+          'Busca inspiración web creativa.png',
+          'Observa colores y composición en Behance.png',
+          'Ideas visuales en tu escritorio.png',
+          'Referencias para tu landing page.png'
+        ],
+        urls:[
+          'www.awwwards.com',
+          'www.behance.net',
+          'www.dribbble.com',
+          'www.land-book.com'
+        ],
+        delays:[2000,16000,31000,45000]})
+    },
+    {
+      file:'09_Guardar_referencias.mp3', kicker:'Guardar referencias',
+      headline:'Guarda lo que te guste.',
+      sub:'Una captura, y una nota de por qué te gustó.',
+      visual:({pin})=>pin({tilt:'-2deg',
+        images:['Guarda referencias con una nota.png','Finder con referencias web en MacBook.png'],
+        delays:[0,18000]})
+    },
+    {
+      file:'10_Cierre.mp3', kicker:'Cierre',
+      headline:'Terminaste el Módulo 0.',
+      sub:'',
+      visual:({pin})=>pin({tilt:'1deg', images:['Antes de continuar_ checklist del Módulo 1.png']})
+    },
+  ];
+
+  const $ = s=>document.querySelector(s);
+  const scenesEl = $('#scenes');
+  const ruler = $('#ruler');
+  const player = $('#player');
+  const seekBar = $('#seekBar');
+  const timeLabel = $('#timeLabel');
+  let current = -1, playing = false, timedHandles = [];
+  function clearTimers(){ timedHandles.forEach(clearTimeout); timedHandles=[]; }
+
+  // Duración real de cada audio (segundos) — define la línea de tiempo única del módulo.
+  const DURATIONS = [39.157500, 32.757500, 40.202438, 40.751000, 55.405687, 87.875875, 19.487313, 57.469375, 31.634250, 41.560812];
+  const OFFSETS = [0];
+  DURATIONS.forEach((d,i)=> OFFSETS.push(OFFSETS[i] + d));
+  const TOTAL_DURATION = OFFSETS[OFFSETS.length-1];
+  seekBar.max = TOTAL_DURATION;
+
+  function formatTime(t){
+    t = Math.max(0, t);
+    const m = Math.floor(t/60), s = Math.round(t%60);
+    return `${m}:${String(s).padStart(2,'0')}`;
+  }
+
+  ruler.innerHTML = SCENES.map((s,i)=>`<div class="tick" data-i="${i}"><span>${String(i+1).padStart(2,'0')}</span></div>`).join('');
+  ruler.querySelectorAll('.tick').forEach(t=>{
+    t.style.cursor = 'pointer';
+    t.addEventListener('click', ()=> seekGlobal(OFFSETS[+t.dataset.i], playing));
+  });
+
+  const chapterMarks = $('#chapterMarks');
+  chapterMarks.innerHTML = SCENES.slice(1).map((s,i)=>{
+    const pct = (OFFSETS[i+1] / TOTAL_DURATION * 100).toFixed(2);
+    return `<div class="mark" style="left:${pct}%" title="${String(i+2).padStart(2,'0')} · ${s.kicker} (${formatTime(OFFSETS[i+1])})"></div>`;
+  }).join('');
+
+  const IMG_DIR = 'img_modulo 0/';
+  function imgSrc(name){ return encodeURI(IMG_DIR + name); }
+
+  function pinBuilder(sceneRoot){
+    return {
+      pin({tilt='-2deg', images=[], delays=null, note='', urls=null}){
+        const slides = images.map((name,i)=>`<img class="slide${i===0?' on':''}" src="${imgSrc(name)}" alt="">`).join('');
+        // Los links de referencia se muestran todos juntos, fijos, durante toda la escena
+        // (no van sincronizados con el cambio de imágenes).
+        const urlList = urls ? `<div class="url-list">${urls.map(u=>`<a class="url-item" href="https://${u.replace(/^https?:\/\//,'')}" target="_blank" rel="noopener">${u}</a>`).join('')}</div>` : '';
+        const html = `<div class="visual"><div class="pin" style="--tilt:${tilt}"><div class="tape"></div><div class="frame">${slides}${urlList}</div>${note?`<div class="pin-note">${note}</div>`:''}</div></div>`;
+        sceneRoot.insertAdjacentHTML('beforeend', html);
+        const schedules = [];
+        const d = delays || images.map((_,i)=>i*15000);
+        if (images.length>1){
+          schedules.push({selector:'.pin .frame img', delays: d});
+        }
+        if (schedules.length) return {slideSchedules: schedules};
+      },
+      mount(html){
+        sceneRoot.insertAdjacentHTML('beforeend', `<div class="visual">${html}</div>`);
+      }
+    };
+  }
+
+  function wrapWords(text){
+    return text.split(' ').map((w,i)=>`<span class="word" style="transition-delay:${i*45}ms">${w}</span>`).join(' ');
+  }
+
+  SCENES.forEach((s,i)=>{
+    const el = document.createElement('div');
+    el.className = 'scene';
+    el.dataset.i = i;
+    el.innerHTML = `
+      <div class="text-block">
+        <div class="kicker"><span class="num">${String(i+1).padStart(2,'0')}</span>${s.kicker}</div>
+        <h1 class="headline">${wrapWords(s.headline)}</h1>
+        ${s.sub?`<div class="sub">${s.sub}</div>`:''}
+        <div class="ink-rule"></div>
+      </div>`;
+    scenesEl.appendChild(el);
+    const api = pinBuilder(el);
+    const result = s.visual(api);
+    s._timedSelector = result && result.timedChildren;
+    s._slideSchedules = result && result.slideSchedules;
+  });
+
+  // El cuadro (.pin) debe medir siempre 16:9 real, quepa como quepa en .visual —
+  // si se deja que width/height se autoajusten por CSS, en ventanas muy altas y
+  // angostas (como la columna de imagen 2/3) el navegador rompe la proporción y
+  // la imagen queda recortada/con zoom. Acá se calcula el tamaño exacto en JS.
+  function fitFrames(){
+    document.querySelectorAll('.visual').forEach(v=>{
+      const cw = v.clientWidth, ch = v.clientHeight;
+      if (!cw || !ch) return;
+      const ratio = 16/9;
+      let w, h;
+      if (cw/ch > ratio){ h = ch; w = ch*ratio; }
+      else { w = cw; h = cw/ratio; }
+      const pin = v.querySelector('.pin');
+      if (pin){ pin.style.width = w+'px'; pin.style.height = h+'px'; }
+    });
+  }
+  window.addEventListener('resize', fitFrames);
+  fitFrames();
+
+  // word reveal animation css (added after wrap, since transition needs base state)
+  const styleTag = document.createElement('style');
+  styleTag.textContent = `.scene.live .headline .word{opacity:1;transform:translateY(0);filter:blur(0);transition:opacity .5s ease,transform .5s ease,filter .5s ease}`;
+  document.head.appendChild(styleTag);
+
+  // Muestra, para cada schedule de la escena, la imagen/elemento que corresponde al segundo actual.
+  function updateSlideForTime(i, tSec){
+    const scheds = SCENES[i]._slideSchedules;
+    if (!scheds) return;
+    const el = document.querySelector(`.scene[data-i="${i}"]`);
+    if (!el) return;
+    scheds.forEach(sched=>{
+      const kids = [...el.querySelectorAll(sched.selector)];
+      let activeIdx = 0;
+      for (let k=0;k<sched.delays.length;k++){ if (tSec*1000 >= sched.delays[k]) activeIdx = k; }
+      kids.forEach((k,idx)=> k.classList.toggle('on', idx===activeIdx));
+    });
+  }
+
+  function showScene(i, localTime){
+    clearTimers();
+    document.querySelectorAll('.scene').forEach(el=>el.classList.remove('live'));
+    document.querySelectorAll('.tick').forEach(t=>{
+      t.classList.toggle('done', +t.dataset.i < i);
+      t.classList.toggle('active', +t.dataset.i === i);
+    });
+    const el = document.querySelector(`.scene[data-i="${i}"]`);
+    el.classList.add('live');
+    $('#sceneLabel').textContent = `${i+1} / ${SCENES.length} · ${SCENES[i].kicker}`;
+
+    // Animación de entrada (checklist, lista, etc.) — cosmética, no depende del audio.
+    const sel = SCENES[i]._timedSelector;
+    if (sel){
+      const kids = [...el.querySelectorAll(sel)];
+      kids.forEach((k,idx)=>{
+        const t = setTimeout(()=>k.classList.add('on'), 500 + idx*450);
+        timedHandles.push(t);
+      });
+    }
+
+    const changedFile = current !== i;
+    current = i;
+    if (changedFile) player.src = SCENES[i].file;
+    updateSlideForTime(i, localTime || 0);
+  }
+
+  // Línea de tiempo única: convierte un segundo "global" (0..TOTAL_DURATION) en escena + segundo local.
+  function sceneAndOffsetFor(globalT){
+    let idx = 0;
+    for (let k=0;k<DURATIONS.length;k++){ if (globalT >= OFFSETS[k]) idx = k; }
+    return {idx, local: Math.max(0, globalT - OFFSETS[idx])};
+  }
+
+  function seekGlobal(globalT, keepPlaying){
+    globalT = Math.max(0, Math.min(globalT, TOTAL_DURATION - 0.05));
+    const {idx, local} = sceneAndOffsetFor(globalT);
+    const changedFile = current !== idx;
+    showScene(idx, local);
+    const applyTime = ()=>{ player.currentTime = local; };
+    if (changedFile){
+      // El evento 'loadedmetadata' a veces ya se disparó antes de que lleguemos a escuchar
+      // (carrera con showScene asignando player.src), dejando el salto sin aplicar.
+      // Por eso aplicamos de inmediato si los metadatos ya están listos, y además
+      // escuchamos el evento como respaldo para cuando todavía no lo están.
+      player.addEventListener('loadedmetadata', applyTime, {once:true});
+      if (player.readyState >= 1) applyTime();
+    } else {
+      applyTime();
+    }
+    updateTimeUI(globalT);
+    if (keepPlaying) playCurrent();
+  }
+
+  function updateTimeUI(globalT){
+    timeLabel.textContent = `${formatTime(globalT)} / ${formatTime(TOTAL_DURATION)}`;
+    if (!seekBar.matches(':active')) seekBar.value = globalT;
+  }
+
+  function playCurrent(){
+    player.volume = 1; player.muted = false;
+    player.play().then(()=>{ playing=true; $('#playBtn').textContent='❙❙ pausar'; }).catch(err=>{
+      $('#audioDebug').textContent = 'No se pudo reproducir: ' + err.message + ' — presiona ▶ reproducir';
+    });
+  }
+
+  player.addEventListener('error', ()=>{
+    const code = player.error ? player.error.code : '?';
+    const names = {1:'ABORTED',2:'NETWORK',3:'DECODE',4:'SRC_NOT_SUPPORTED'};
+    $('#audioDebug').textContent = `Error cargando "${player.getAttribute('src')}" — código ${code} (${names[code]||'desconocido'})`;
+  });
+  player.addEventListener('playing', ()=>{ $('#audioDebug').textContent = ''; });
+
+  let playbackRate = 1;
+  player.addEventListener('loadedmetadata', ()=>{ player.playbackRate = playbackRate; });
+  document.querySelectorAll('#speedControls button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      playbackRate = parseFloat(btn.dataset.rate);
+      player.playbackRate = playbackRate;
+      document.querySelectorAll('#speedControls button').forEach(b=>b.classList.toggle('active', b===btn));
+    });
+  });
+
+  player.addEventListener('timeupdate', ()=>{
+    if (current === -1) return;
+    updateSlideForTime(current, player.currentTime);
+    updateTimeUI(OFFSETS[current] + player.currentTime);
+  });
+
+  player.addEventListener('ended', ()=>{
+    if (current < SCENES.length-1){ seekGlobal(OFFSETS[current+1], true); }
+    else { playing=false; $('#playBtn').textContent='↺ reiniciar'; }
+  });
+
+  $('#startBtn').addEventListener('click', ()=>{
+    $('#startOverlay').remove();
+    $('#controls').hidden=false;
+    $('#timelineRow').hidden=false;
+    seekGlobal(0, true);
+  });
+  $('#playBtn').addEventListener('click', ()=>{
+    if (current===-1){ seekGlobal(0, true); return; }
+    if (playing){ player.pause(); playing=false; $('#playBtn').textContent='▶ reproducir'; }
+    else if (player.ended || (current===SCENES.length-1 && player.currentTime>=player.duration-0.2)){ seekGlobal(0, true); }
+    else playCurrent();
+  });
+  $('#nextBtn').addEventListener('click', ()=>{
+    if (current < SCENES.length-1) seekGlobal(OFFSETS[current+1], playing);
+  });
+  $('#prevBtn').addEventListener('click', ()=>{
+    if (current > 0) seekGlobal(OFFSETS[current-1], playing);
+  });
+
+  seekBar.addEventListener('input', ()=>{
+    timeLabel.textContent = `${formatTime(parseFloat(seekBar.value))} / ${formatTime(TOTAL_DURATION)}`;
+  });
+  seekBar.addEventListener('change', ()=>{
+    seekGlobal(parseFloat(seekBar.value), playing);
+  });
+
+  // Expuesto para que el editor de capturas (editor.html) pueda controlar este video embebido.
+  window.seekGlobal = seekGlobal;
+  window.playerPause = ()=>{ player.pause(); playing=false; };
+  window.getTotalDuration = ()=> TOTAL_DURATION;
+  window.getCurrentGlobalTime = ()=> current===-1 ? 0 : OFFSETS[current] + player.currentTime;
+  window.isPlayerPlaying = ()=> playing;
+  window.setPlaybackRate = (r)=>{ playbackRate = r; player.playbackRate = r; };
+  window.getPlaybackRate = ()=> playbackRate;
+})();
+</script>
+</body>
+</html>
